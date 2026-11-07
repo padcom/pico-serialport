@@ -150,7 +150,8 @@ export class SerialPort implements ByteStream {
     }
   }
 
-  /// Closes the port. (A `read()` still waiting isn't interrupted yet: close after the last read.)
+  /// Closes the port. A `read()` already waiting isn't interrupted, and keeps the program from
+  /// ending (pico-lang #100): close after the last read, or end with `exit()`.
   public close(): void {
     if (closed) {
       return
