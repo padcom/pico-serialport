@@ -1,0 +1,51 @@
+// A tiny serial monitor.
+//
+//   pico run examples/monitor.pi                         lists the ports
+//   pico run examples/monitor.pi -- /dev/ttyUSB0 115200  what you type goes to the port, what arrives is printed
+import { args, stdin, stdout, stderr, exit } from "std/process"
+import { SerialError, SerialPort, listPorts, openPort } from "../index"
+
+async function list(): Promise<void> {
+  const ports = await listPorts()
+  if (ports.length == 0) {
+    println("no serial ports found")
+  }
+  for (const p of ports) {
+    const usb = if (p.vendorId == null) "" else ` (USB ${p.vendorId}:${p.productId ?? "?"} ${p.product ?? ""})`
+    println(p.path + usb)
+  }
+}
+
+async function pump(port: SerialPort): Promise<void> throws Error {
+  for await (const chunk of port) {
+    await stdout.write(chunk)
+  }
+}
+
+async function monitor(path: string, baud: int): Promise<void> throws Error {
+  const port = openPort(path, { baudRate: baud })
+  println(`${path} at ${baud} 8N1; end input (Ctrl-D) to quit`)
+  const received = pump(port)
+  for await (const line of stdin) {
+    await port.write(line)
+  }
+  // The port's read can't be interrupted yet (see the README): leave without waiting for it.
+  port.close()
+  exit(0)
+  await received
+}
+
+async function main(): Promise<void> throws Error {
+  if (args.length == 0) {
+    await list()
+    return
+  }
+  try {
+    await monitor(args[0], if (args.length > 1) parseInt(args[1]) else 115200)
+  } catch (e: SerialError) {
+    await stderr.write(new TextEncoder().encode(`${e.code}: ${e.message}\n`))
+    exit(1)
+  }
+}
+
+await main()

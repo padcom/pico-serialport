@@ -49,6 +49,17 @@ port.close()
 
   It also carries the `errno`, and a message that says what was being done.
 
+## Example
+
+`examples/monitor.pi` is a small serial monitor:
+- with no arguments, it lists the ports;
+- with a path and a baud rate, it sends what you type and prints what arrives.
+
+```sh
+pico run examples/monitor.pi
+pico run examples/monitor.pi -- /dev/ttyUSB0 115200
+```
+
 ## Known limits
 
 - Closing a port doesn't interrupt a `read()` that is still waiting: the runtime's I/O thread stays blocked until a byte arrives. Close after the last read, or after the device has gone quiet.
