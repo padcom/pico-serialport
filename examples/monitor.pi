@@ -29,9 +29,8 @@ async function monitor(path: string, baud: int): Promise<void> throws Error {
   for await (const line of stdin) {
     await port.write(line)
   }
-  // The port's read can't be interrupted yet (see the README): leave without waiting for it.
+  // Closing ends the pending read, so the printing loop finishes too.
   port.close()
-  exit(0)
   await received
 }
 

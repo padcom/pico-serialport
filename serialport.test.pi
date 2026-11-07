@@ -1,6 +1,7 @@
 // SerialPort against a pseudo-terminal pair: the slave stands in for a serial device (it's a tty,
 // so termios applies) and the test drives the other end.
 import { describe, it, expect } from "std/test"
+import { delay } from "std/timers"
 import { Reader, Writer } from "std/process"
 import * as t from "c:termios.h"
 import * as f from "c:fcntl.h"
@@ -130,7 +131,20 @@ async function closedPortRefuses(): Promise<void> throws Error {
   }
 }
 
+async function closeEndsAWaitingRead(): Promise<void> throws Error {
+  const pty = new Pty()
+  const port = openPort(pty.path, { baudRate: 9600 })
+  const pending = port.read()
+  await delay(100)
+  port.close()
+  const got = await pending
+  expect(got == null).toBe(true)
+  // The port can be opened again: the descriptor and exclusive mode are released.
+  openPort(pty.path, { baudRate: 9600 }).close()
+}
+
 describe("SerialPort (on a pseudo-terminal)", () => {
+  it("ends a waiting read when closed", closeEndsAWaitingRead)
   it("moves bytes both ways", roundTripsData)
   it("applies speed and stop bits", appliesTheSettings)
   it("sets the framing bits, clearing earlier ones", framesBits)

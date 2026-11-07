@@ -62,7 +62,7 @@ pico run examples/monitor.pi -- /dev/ttyUSB0 115200
 
 ## Known limits
 
-- Closing a port doesn't interrupt a `read()` that is already waiting. The runtime's I/O thread stays blocked in `read(2)` until a byte arrives, and until then the program can't end, because the event loop waits for that read. So close after the last read has finished, or end the program with `exit()`, as `examples/monitor.pi` does. This needs a cancellable read in Pico's runtime: [pico-lang #100](https://github.com/padcom/pico-lang/issues/100).
+- Closing a port ends a `read()` that is already waiting: it settles with `null`. This needs a pico with `Reader.close()`, which is on pico-lang `main` since [#100](https://github.com/padcom/pico-lang/issues/100) and not released yet. With pico 0.4.2, a waiting read keeps the program from ending.
 - Linux only so far. Other systems get an empty `listPorts()`, and `openPort` fails there.
 
 ## Tests
