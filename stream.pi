@@ -1,0 +1,12 @@
+// The transport-neutral byte stream (PLAN.md §13): what a protocol library such as pico-mavlink
+// consumes, so it never imports serial-specific code. A serial port, a TCP connection or a test's
+// in-memory pipe can all be one.
+
+export interface ByteStream {
+  /// The next bytes, as soon as some are there; null once the stream has ended.
+  read(): Promise<Uint8Array?, Error>
+  /// Writes all of `bytes`, in order with earlier writes.
+  write(bytes: Uint8Array): Promise<void, Error>
+  /// Ends the stream (pending writes are sent first where the transport can).
+  close(): void
+}

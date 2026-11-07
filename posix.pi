@@ -1,0 +1,112 @@
+// The POSIX calls a serial port needs (Linux first), declared directly: `open`, `ioctl` and `fcntl`
+// are variadic in C, which header import leaves out, and their fixed-argument forms are what Linux
+// ABIs pass anyway. Buffers cross as their byte address (see `addr`).
+import * as t from "c:termios.h"
+
+export extern "C" {
+  function open(path: string, flags: c_int): c_int
+  function close(fd: c_int): c_int
+  function dup(fd: c_int): c_int
+  function fcntl(fd: c_int, cmd: c_int, arg: c_int): c_int
+  function ioctl(fd: c_int, request: c_ulong): c_int
+  function tcgetattr(fd: c_int, p: usize): c_int
+  function tcsetattr(fd: c_int, when: c_int, p: usize): c_int
+  function tcflush(fd: c_int, queue: c_int): c_int
+  function cfmakeraw(p: usize): void
+  function cfsetspeed(p: usize, speed: u32): c_int
+  function cfgetospeed(p: usize): u32
+  function __errno_location(): ptr<c_int>
+  function strerror(e: c_int): ptr<u8>
+  function realpath(path: string, resolved: usize): usize
+}
+
+/// The byte address of a view's first byte, for C. (The `ArrayBuffer`'s memory is the runtime's
+/// `__handle`; `ptr.of` on a view isn't usable yet.)
+export function addr(b: Uint8Array): usize {
+  (b.buffer.__handle + b.byteOffset) as usize
+}
+
+/// `errno` after a failed call.
+export function errno(): int {
+  unsafe {
+    __errno_location().read() as int
+  }
+}
+
+/// `strerror(e)`.
+export function describe(e: int): string {
+  unsafe {
+    string.fromC(strerror(e as c_int))
+  }
+}
+
+/// The NUL-terminated text at the start of `b`.
+export function cText(b: Uint8Array): string {
+  let n = 0
+  while (n < b.length && b.get(n) != 0) {
+    n += 1
+  }
+  try {
+    new TextDecoder().decode(b.subarray(0, n))
+  } catch (e: TypeError) {
+    ""
+  }
+}
+
+/// The canonical path of `path` (symlinks resolved), or null.
+export function canonical(path: string): string? {
+  const out = new Uint8Array(4097)  // PATH_MAX + 1
+  if (realpath(path, addr(out)) == 0) {
+    return null
+  }
+  cText(out)
+}
+
+/// `O_CLOEXEC` (glibc defines it through `__O_CLOEXEC`, which header import doesn't follow; the
+/// value is Linux's on arm64 and x86-64).
+export const O_CLOEXEC: int = 0x80000
+
+/// Room for a `struct termios` on every libc (glibc's is 60 bytes).
+export const TERMIOS_BYTES: int = 256
+
+/// `c_cflag`'s offset in `struct termios` (after c_iflag and c_oflag, 32 bits each, on glibc and
+/// musl).
+export const CFLAG_OFFSET: int = 8
+
+/// A little-endian u32 of `b` at `at`.
+export function u32At(b: Uint8Array, at: int): int {
+  b.get(at) as int | ((b.get(at + 1) as int) << 8) | ((b.get(at + 2) as int) << 16) | ((b.get(at + 3) as int) << 24)
+}
+
+/// Stores `v` as a little-endian u32 of `b` at `at`.
+export function setU32At(b: Uint8Array, at: int, v: int): void {
+  b.set(at, (v & 0xff) as u8)
+  b.set(at + 1, ((v >> 8) & 0xff) as u8)
+  b.set(at + 2, ((v >> 16) & 0xff) as u8)
+  b.set(at + 3, ((v >> 24) & 0xff) as u8)
+}
+
+/// The termios speed constant for `baud`, or -1 for a rate the classic interface can't express.
+export function speedConstant(baud: int): int {
+  match (baud) {
+    1200 => t.B1200 as int,
+    2400 => t.B2400 as int,
+    4800 => t.B4800 as int,
+    9600 => t.B9600 as int,
+    19200 => t.B19200 as int,
+    38400 => t.B38400 as int,
+    57600 => t.B57600 as int,
+    115200 => t.B115200 as int,
+    230400 => t.B230400 as int,
+    460800 => t.B460800 as int,
+    500000 => t.B500000 as int,
+    576000 => t.B576000 as int,
+    921600 => t.B921600 as int,
+    1000000 => t.B1000000 as int,
+    1500000 => t.B1500000 as int,
+    2000000 => t.B2000000 as int,
+    3000000 => t.B3000000 as int,
+    4000000 => t.B4000000 as int,
+    _ => -1,
+  }
+}

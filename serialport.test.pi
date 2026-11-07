@@ -1,0 +1,139 @@
+// SerialPort against a pseudo-terminal pair: the slave stands in for a serial device (it's a tty,
+// so termios applies) and the test drives the other end.
+import { describe, it, expect } from "std/test"
+import { Reader, Writer } from "std/process"
+import * as t from "c:termios.h"
+import * as f from "c:fcntl.h"
+import { CFLAG_OFFSET, TERMIOS_BYTES, addr, cText, cfgetospeed, dup, tcgetattr, u32At, cfmakeraw, tcsetattr } from "./posix"
+import { FlowControl, Parity, SerialError, framing, openPort } from "./serialport"
+
+extern "C" {
+  function posix_openpt(flags: c_int): c_int
+  function grantpt(fd: c_int): c_int
+  function unlockpt(fd: c_int): c_int
+  function ptsname_r(fd: c_int, buf: usize, len: usize): c_int
+}
+
+class Pty {
+  public master: int
+  public path: string
+  public reader: Reader
+  public writer: Writer
+
+  constructor() {
+    const m = posix_openpt(f.O_RDWR | f.O_NOCTTY)
+    grantpt(m)
+    unlockpt(m)
+    const name = new Uint8Array(128)
+    ptsname_r(m, addr(name), 128 as usize)
+    // The master raw too, so nothing is echoed back to the device side.
+    const tio = new Uint8Array(TERMIOS_BYTES)
+    tcgetattr(m, addr(tio))
+    cfmakeraw(addr(tio))
+    tcsetattr(m, t.TCSANOW, addr(tio))
+    this.master = m as int
+    this.path = cText(name)
+    this.reader = new Reader(m as int, "pty", true)
+    this.writer = new Writer(dup(m) as int, "pty", true)
+  }
+
+  /// The cflag and output speed the pair has now (master and slave share them on Linux).
+  public settings(): int[] {
+    const tio = new Uint8Array(TERMIOS_BYTES)
+    tcgetattr(master as c_int, addr(tio))
+    [u32At(tio, CFLAG_OFFSET), cfgetospeed(addr(tio)) as int]
+  }
+}
+
+const text = (b: Uint8Array?) => if (b == null) "<end>" else new TextDecoder().decode(b)
+
+async function readText(read: () => Promise<Uint8Array?, Error>, n: int): Promise<string> throws Error {
+  let got = ""
+  while (got.length < n) {
+    got += text(await read())
+  }
+  got
+}
+
+async function portToDevice(): Promise<string> throws Error {
+  const pty = new Pty()
+  const port = openPort(pty.path, { baudRate: 115200 })
+  await port.write(new TextEncoder().encode("hello"))
+  const got = await readText(() => pty.reader.read(), 5)
+  port.close()
+  got
+}
+
+async function deviceToPort(): Promise<string> throws Error {
+  const pty = new Pty()
+  const port = openPort(pty.path, { baudRate: 115200 })
+  await pty.writer.write(new TextEncoder().encode("world"))
+  const got = await readText(() => port.read(), 5)
+  port.close()
+  got
+}
+
+async function roundTripsData(): Promise<void> throws Error {
+  expect(await portToDevice()).toBe("hello")
+  expect(await deviceToPort()).toBe("world")
+}
+
+function appliesTheSettings(): void {
+  const pty = new Pty()
+  // A pty forces CS8 without parity whatever is set (pty_set_termios), so only speed and stop bits
+  // show here; framesBits covers the rest.
+  const port = openPort(pty.path, { baudRate: 57600, dataBits: 7, parity: Parity.Even, stopBits: 2 })
+  const s = pty.settings()
+  expect(s[1]).toBe(t.B57600 as int)
+  expect((s[0] & (t.CSTOPB as int)) != 0).toBe(true)
+  expect((s[0] & (t.CREAD as int)) != 0 && (s[0] & (t.CLOCAL as int)) != 0).toBe(true)
+  port.close()
+}
+
+function framesBits(): void {
+  const c = framing(0, { baudRate: 9600, parity: Parity.Odd, flowControl: FlowControl.Hardware })
+  expect(c & (t.CSIZE as int)).toBe(t.CS8 as int)
+  expect((c & (t.PARODD as int)) != 0 && (c & (t.CRTSCTS as int)) != 0 && (c & (t.CSTOPB as int)) == 0).toBe(true)
+  // What was set before goes: 8N1 over 7E2 + RTS/CTS clears them.
+  expect(framing(c | (t.CSTOPB as int), { baudRate: 9600 }) & ((t.PARENB as int) | (t.CSTOPB as int) | (t.CRTSCTS as int))).toBe(0)
+}
+
+function codeOf(open: () => void throws SerialError): string {
+  try {
+    open()
+    "opened"
+  } catch (e: SerialError) {
+    e.code
+  }
+}
+
+function refuses(): void {
+  const pty = new Pty()
+  const first = openPort(pty.path, { baudRate: 9600 })
+  expect(codeOf(() => { openPort(pty.path, { baudRate: 9600 }) })).toBe("BUSY")
+  first.close()
+  expect(codeOf(() => { openPort("/nonexistent/tty", { baudRate: 9600 }) })).toBe("NOT_FOUND")
+  expect(codeOf(() => { openPort("/dev/null", { baudRate: 9600 }) })).toBe("NOT_A_SERIAL_PORT")
+  expect(codeOf(() => { openPort(pty.path, { baudRate: 12345 }) })).toBe("UNSUPPORTED")
+  expect(codeOf(() => { openPort(pty.path, { baudRate: 9600, dataBits: 9 }) })).toBe("UNSUPPORTED")
+}
+
+async function closedPortRefuses(): Promise<void> throws Error {
+  const pty = new Pty()
+  const port = openPort(pty.path, { baudRate: 9600 })
+  port.close()
+  try {
+    await port.write(new Uint8Array(1))
+    expect("written").toBe("CLOSED")
+  } catch (e: SerialError) {
+    expect(e.code).toBe("CLOSED")
+  }
+}
+
+describe("SerialPort (on a pseudo-terminal)", () => {
+  it("moves bytes both ways", roundTripsData)
+  it("applies speed and stop bits", appliesTheSettings)
+  it("sets the framing bits, clearing earlier ones", framesBits)
+  it("refuses a second open, missing paths, non-ttys and unsupported options", refuses)
+  it("refuses to write once closed", closedPortRefuses)
+})

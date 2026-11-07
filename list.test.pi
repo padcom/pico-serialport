@@ -1,0 +1,54 @@
+// listPorts over a made-up sysfs tree.
+import { describe, it, expect } from "std/test"
+import { exists, mkdir, remove, writeText } from "std/fs"
+import { listPorts } from "./list"
+
+extern "C" {
+  function symlink(target: string, link: string): c_int
+  function getpid(): c_int
+}
+
+async function tree(): Promise<string> throws Error {
+  const root = `/tmp/pico-serialport-sysfs-${getpid()}`
+  if (await exists(root)) {
+    await remove(root, true)
+  }
+  const devices = root + "/devices"
+  const usb = devices + "/usb1/1-1"
+  await mkdir(devices + "/platform/serial8250", true)
+  await mkdir(devices + "/platform/pl011", true)
+  await mkdir(usb + "/1-1:1.0/ttyUSB0", true)
+  for (const [name, value] of [["idVendor", "0403"], ["idProduct", "6001"], ["serial", "A10K1D2X"], ["manufacturer", "FTDI"], ["product", "FT232R USB UART"]]) {
+    await writeText(usb + "/" + name, value + "\n")
+  }
+  const tty = root + "/class/tty"
+  for (const name of ["tty0", "ttyAMA0", "ttyS0", "ttyUSB0"]) {
+    await mkdir(tty + "/" + name, true)
+  }
+  // tty0 (a virtual console) has no device behind it; ttyS0 is an 8250 placeholder.
+  symlink(devices + "/platform/serial8250", tty + "/ttyS0/device")
+  await writeText(tty + "/ttyS0/type", "0\n")
+  symlink(devices + "/platform/pl011", tty + "/ttyAMA0/device")
+  await writeText(tty + "/ttyAMA0/type", "32\n")
+  symlink(usb + "/1-1:1.0/ttyUSB0", tty + "/ttyUSB0/device")
+  root
+}
+
+async function findsPorts(): Promise<void> throws Error {
+  const root = await tree()
+  const ports = await listPorts(root, "/dev")
+  await remove(root, true)
+  expect(ports.map((p) => p.path).join(",")).toBe("/dev/ttyAMA0,/dev/ttyUSB0")
+  expect(ports[0].vendorId == null).toBe(true)
+  const u = ports[1]
+  expect(`${u.vendorId}:${u.productId} ${u.serialNumber} ${u.manufacturer} / ${u.product}`).toBe("0403:6001 A10K1D2X FTDI / FT232R USB UART")
+}
+
+async function noSysfs(): Promise<void> throws Error {
+  expect((await listPorts("/nonexistent")).length).toBe(0)
+}
+
+describe("listPorts", () => {
+  it("finds ports with a device, skips placeholders, reads USB ids", findsPorts)
+  it("finds nothing without sysfs", noSysfs)
+})
