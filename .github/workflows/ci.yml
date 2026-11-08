@@ -48,11 +48,19 @@ jobs:
             tar -xzf "$RUNNER_TEMP/pico-$v-${{ matrix.target }}.tar.gz" -C "$RUNNER_TEMP/pico"
             dirname "$(find "$RUNNER_TEMP/pico" -type f -name pico -perm -u+x | head -1)" >> "$GITHUB_PATH"
           fi
-      - name: Format and lint
+      - name: Format
         run: |
           pico --version
           pico fmt --check .
-          pico lint .
+      - name: Lint
+        if: ${{ matrix.linux }}
+        run: pico lint .
+      # Off Linux the Linux backend can't be checked: it names termios constants other systems lack.
+      - name: Lint (without the Linux-only files)
+        if: ${{ !matrix.linux }}
+        run: |
+          echo "::warning::serialport.linux.pi, list.linux.pi, posix.pi and their tests aren't linted on ${{ matrix.target }}: they use Linux's termios."
+          pico lint index.pi list.pi serialport.pi stream.pi types.pi unsupported.pi unsupported.test.pi
       - name: Tests
         if: ${{ matrix.linux }}
         run: |
