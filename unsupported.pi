@@ -1,0 +1,47 @@
+// Serial ports where this package has no backend yet: a program still builds and runs, it just
+// finds no ports and can't open one.
+import { Reader } from "std/process"
+import { ByteStream } from "./stream"
+import { PortInfo, SerialError, SerialOptions } from "./types"
+
+function unsupported(path: string): SerialError {
+  new SerialError("UNSUPPORTED", `${path}: serial ports aren't supported on this platform yet`)
+}
+
+/// There's no way to get one here: `openPort` always fails. It exists so that programs using the
+/// type build on every platform.
+export class SerialPort implements ByteStream {
+  public readonly path: string
+  public readonly options: SerialOptions
+
+  constructor(path: string, options: SerialOptions) {
+    this.path = path
+    this.options = options
+  }
+
+  public async read(): Promise<Uint8Array?> throws Error {
+    throw unsupported(path)
+  }
+
+  public async write(_bytes: Uint8Array): Promise<void> throws Error {
+    throw unsupported(path)
+  }
+
+  public flush(): void {}
+
+  public close(): void {}
+
+  public asyncIterator(): Reader {
+    panic(unsupported(path).message)
+  }
+}
+
+/// Always fails with `UNSUPPORTED`.
+export function openPort(path: string, _options: SerialOptions): SerialPort throws SerialError {
+  throw unsupported(path)
+}
+
+/// No ports.
+export async function listPorts(_sysfs: string = "/sys", _dev: string = "/dev"): Promise<PortInfo[]> {
+  []
+}

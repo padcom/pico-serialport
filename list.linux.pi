@@ -1,0 +1,55 @@
+// The serial ports this machine has, from sysfs (Linux).
+import { readDir, readText, exists } from "std/fs"
+import { canonical } from "./posix"
+import { PortInfo } from "./types"
+
+export { PortInfo } from "./types"
+
+async function attribute(dir: string, name: string): Promise<string?> {
+  try {
+    (await readText(dir + "/" + name)).trim()
+  } catch (e: Error) {
+    null
+  }
+}
+
+/// The nearest directory at or above `dir` (but below `root`) that has an `idVendor`: the USB device.
+async function usbDevice(dir: string, root: string): Promise<string?> {
+  let d = dir
+  while (d.length > root.length && d.startsWith(root)) {
+    if (await exists(d + "/idVendor")) {
+      return d
+    }
+    d = d.slice(0, d.lastIndexOf("/"))
+  }
+  null
+}
+
+/// The serial ports, in name order. A tty counts when it has a device behind it and isn't an 8250
+/// placeholder (`type` 0, PORT_UNKNOWN). `sysfs` is for tests.
+export async function listPorts(sysfs: string = "/sys", dev: string = "/dev"): Promise<PortInfo[]> {
+  const ports: PortInfo[] = []
+  const root = canonical(sysfs) ?? sysfs
+  try {
+    for await (const e of readDir(sysfs + "/class/tty")) {
+      const tty = sysfs + "/class/tty/" + e.name
+      const device = canonical(tty + "/device")
+      if (device == null || (await attribute(tty, "type")) == "0") {
+        continue
+      }
+      const info: PortInfo = { path: dev + "/" + e.name }
+      const usb = await usbDevice(device!, root)
+      if (usb != null) {
+        info.vendorId = await attribute(usb!, "idVendor")
+        info.productId = await attribute(usb!, "idProduct")
+        info.serialNumber = await attribute(usb!, "serial")
+        info.manufacturer = await attribute(usb!, "manufacturer")
+        info.product = await attribute(usb!, "product")
+      }
+      ports.push(info)
+    }
+  } catch (e: Error) {
+    // No sysfs (not Linux, or a sandbox without it): no ports to offer.
+  }
+  ports
+}

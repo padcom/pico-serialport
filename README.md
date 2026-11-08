@@ -63,7 +63,7 @@ pico run examples/monitor.pi -- /dev/ttyUSB0 115200
 ## Known limits
 
 - Closing a port ends a `read()` that is already waiting: it settles with `null`. This needs a pico with `Reader.close()`, which is on pico-lang `main` since [#100](https://github.com/padcom/pico-lang/issues/100) and not released yet. With pico 0.4.2, a waiting read keeps the program from ending.
-- Linux only so far. Other systems get an empty `listPorts()`, and `openPort` fails there.
+- Linux only so far. A program using this package builds on every target, but elsewhere `listPorts()` is empty and `openPort` fails with `UNSUPPORTED`.
 
 ## Tests
 

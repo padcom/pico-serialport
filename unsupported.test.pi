@@ -1,0 +1,42 @@
+// What a platform without a serial backend gets. Imported directly, so it runs on Linux too.
+import { describe, it, expect } from "std/test"
+import { SerialPort, listPorts, openPort } from "./unsupported"
+import { SerialError } from "./types"
+
+async function findsNoPorts(): Promise<void> throws Error {
+  expect((await listPorts()).length).toBe(0)
+}
+
+function refusesToOpen(): void {
+  let code = "no error"
+  try {
+    openPort("/dev/ttyUSB0", { baudRate: 115200 })
+  } catch (e: SerialError) {
+    code = e.code
+  }
+  expect(code).toBe("UNSUPPORTED")
+}
+
+async function refusesReadsAndWrites(): Promise<void> throws Error {
+  const port = new SerialPort("COM1", { baudRate: 115200 })
+  let code = "no error"
+  try {
+    await port.read()
+  } catch (e: SerialError) {
+    code = e.code
+  }
+  expect(code).toBe("UNSUPPORTED")
+  code = "no error"
+  try {
+    await port.write(new Uint8Array(1))
+  } catch (e: SerialError) {
+    code = e.code
+  }
+  expect(code).toBe("UNSUPPORTED")
+}
+
+describe("without a serial backend", () => {
+  it("finds no ports", findsNoPorts)
+  it("can't open a port, and says why", refusesToOpen)
+  it("refuses reads and writes", refusesReadsAndWrites)
+})
