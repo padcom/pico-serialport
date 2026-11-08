@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # 0.4.3 is the first release with Reader.close, which this package needs.
+  PICO_VERSION: 0.4.3
+
+jobs:
+  ci:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, runner: ubuntu-24.04, linux: true }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm, linux: true }
+          - { target: macos-arm64, runner: macos-15, linux: false }
+          - { target: windows-x64, runner: windows-2025, linux: false }
+          - { target: windows-arm64, runner: windows-11-arm, linux: false }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        # Explicitly bash, which GitHub runs with -eo pipefail: a failing test isn't hidden by tee.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Pico
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Fails the job if the release is missing: nothing below is optional.
+        run: |
+          v=$PICO_VERSION
+          case "${{ matrix.target }}" in windows-*) archive=zip ;; *) archive=tar.gz ;; esac
+          gh release download "v$v" -R padcom/pico-lang -p "pico-$v-${{ matrix.target }}.$archive" -D "$RUNNER_TEMP"
+          mkdir -p "$RUNNER_TEMP/pico"
+          if [ "$archive" = zip ]; then
+            unzip -q "$RUNNER_TEMP/pico-$v-${{ matrix.target }}.zip" -d "$RUNNER_TEMP/pico"
+            cygpath -w "$(dirname "$(find "$RUNNER_TEMP/pico" -type f -name pico.exe | head -1)")" >> "$GITHUB_PATH"
+          else
+            tar -xzf "$RUNNER_TEMP/pico-$v-${{ matrix.target }}.tar.gz" -C "$RUNNER_TEMP/pico"
+            dirname "$(find "$RUNNER_TEMP/pico" -type f -name pico -perm -u+x | head -1)" >> "$GITHUB_PATH"
+          fi
+      - name: Format and lint
+        run: |
+          pico --version
+          pico fmt --check .
+          pico lint .
+      - name: Tests
+        if: ${{ matrix.linux }}
+        run: |
+          pico test . | tee "$RUNNER_TEMP/test.log"
+          bash .github/tests-ran.sh "$RUNNER_TEMP/test.log"
+      - name: Tests (without the Linux-only files)
+        if: ${{ !matrix.linux }}
+        run: |
+          echo "::warning::serialport.test.pi and list.test.pi are skipped on ${{ matrix.target }}: they need termios, a pseudo-terminal and sysfs, and only the Linux backend exists."
+          pico test unsupported.test.pi | tee "$RUNNER_TEMP/test.log"
+          bash .github/tests-ran.sh "$RUNNER_TEMP/test.log"
+      - name: A program using the package links
+        run: pico build examples/monitor.pi -o "$RUNNER_TEMP/monitor${{ startsWith(matrix.target, 'windows') && '.exe' || '' }}"
