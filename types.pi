@@ -1,0 +1,40 @@
+// What every platform's serial code shares: the options, the errors and what a listing reports.
+
+export enum Parity { None, Even, Odd }
+
+export enum FlowControl { None, Hardware }
+
+export struct SerialOptions {
+  baudRate: int
+  /// 5, 6, 7 or 8 (default 8).
+  dataBits?: int
+  parity?: Parity
+  /// 1 or 2 (default 1).
+  stopBits?: int
+  flowControl?: FlowControl
+}
+
+/// Why a port couldn't be opened or used. `code`: NOT_FOUND, PERMISSION_DENIED, BUSY,
+/// NOT_A_SERIAL_PORT, UNSUPPORTED (an option this port or platform can't do), CLOSED or IO.
+export class SerialError extends Error {
+  public code: string
+  public errno: int
+
+  constructor(code: string, message: string, errno: int = 0) {
+    super(message)
+    this.code = code
+    this.errno = errno
+  }
+}
+
+/// A serial port `listPorts` found.
+export struct PortInfo {
+  /// What `openPort` takes, such as `/dev/ttyUSB0`.
+  path: string
+  /// The USB vendor and product ids (4 hex digits) when the port is on a USB device.
+  vendorId?: string
+  productId?: string
+  serialNumber?: string
+  manufacturer?: string
+  product?: string
+}
