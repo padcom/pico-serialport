@@ -1,6 +1,10 @@
 // The POSIX calls a serial port needs (Linux first), declared directly: `open`, `ioctl` and `fcntl`
 // are variadic in C, which header import leaves out, and their fixed-argument forms are what Linux
-// ABIs pass anyway. Buffers cross as their byte address (see `addr`).
+// ABIs pass anyway. Buffers cross as their byte address (see `addr`). `ioctl` is declared variadic
+// (`...`) as it is in C, because it is the one that another package also calls with a third argument:
+// a program that links two declarations of one C symbol with different signatures does not build
+// ("Incorrect number of arguments passed to called function": pico-gamepad's `ioctl(fd, req, buf)`
+// next to a two-argument one).
 import * as t from "c:termios.h"
 
 export extern "C" {
@@ -8,7 +12,7 @@ export extern "C" {
   function close(fd: c_int): c_int
   function dup(fd: c_int): c_int
   function fcntl(fd: c_int, cmd: c_int, arg: c_int): c_int
-  function ioctl(fd: c_int, request: c_ulong): c_int
+  function ioctl(fd: c_int, request: c_ulong, ...): c_int
   function tcgetattr(fd: c_int, p: usize): c_int
   function tcsetattr(fd: c_int, when: c_int, p: usize): c_int
   function tcflush(fd: c_int, queue: c_int): c_int
