@@ -31,7 +31,7 @@ async function tree(): Promise<string> throws Error {
   symlink(devices + "/platform/pl011", tty + "/ttyAMA0/device")
   await writeText(tty + "/ttyAMA0/type", "32\n")
   symlink(usb + "/1-1:1.0/ttyUSB0", tty + "/ttyUSB0/device")
-  root
+  return root
 }
 
 async function findsPorts(): Promise<void> throws Error {

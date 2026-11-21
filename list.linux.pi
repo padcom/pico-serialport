@@ -22,7 +22,7 @@ async function usbDevice(dir: string, root: string): Promise<string?> {
     }
     d = d.slice(0, d.lastIndexOf("/"))
   }
-  null
+  return null
 }
 
 /// The serial ports, in name order. A tty counts when it has a device behind it and isn't an 8250
@@ -51,5 +51,5 @@ export async function listPorts(sysfs: string = "/sys", dev: string = "/dev"): P
   } catch (e: Error) {
     // No sysfs (not Linux, or a sandbox without it): no ports to offer.
   }
-  ports
+  return ports
 }

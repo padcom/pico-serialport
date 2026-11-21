@@ -27,7 +27,7 @@ export extern "C" {
 /// The byte address of a view's first byte, for C. (The `ArrayBuffer`'s memory is the runtime's
 /// `__handle`; `ptr.of` on a view isn't usable yet.)
 export function addr(b: Uint8Array): usize {
-  (b.buffer.__handle + b.byteOffset) as usize
+  return (b.buffer.__handle + b.byteOffset) as usize
 }
 
 /// `errno` after a failed call.
@@ -79,7 +79,7 @@ export const CFLAG_OFFSET: int = 8
 
 /// A little-endian u32 of `b` at `at`.
 export function u32At(b: Uint8Array, at: int): int {
-  b.get(at) as int | ((b.get(at + 1) as int) << 8) | ((b.get(at + 2) as int) << 16) | ((b.get(at + 3) as int) << 24)
+  return b.get(at) as int | ((b.get(at + 1) as int) << 8) | ((b.get(at + 2) as int) << 16) | ((b.get(at + 3) as int) << 24)
 }
 
 /// Stores `v` as a little-endian u32 of `b` at `at`.

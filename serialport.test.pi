@@ -42,7 +42,7 @@ class Pty {
   public settings(): int[] {
     const tio = new Uint8Array(TERMIOS_BYTES)
     tcgetattr(master as c_int, addr(tio))
-    [u32At(tio, CFLAG_OFFSET), cfgetospeed(addr(tio)) as int]
+    return [u32At(tio, CFLAG_OFFSET), cfgetospeed(addr(tio)) as int]
   }
 }
 
@@ -53,7 +53,7 @@ async function readText(read: () => Promise<Uint8Array?, Error>, n: int): Promis
   while (got.length < n) {
     got += text(await read())
   }
-  got
+  return got
 }
 
 async function portToDevice(): Promise<string> throws Error {
@@ -62,7 +62,7 @@ async function portToDevice(): Promise<string> throws Error {
   await port.write(new TextEncoder().encode("hello"))
   const got = await readText(() => pty.reader.read(), 5)
   port.close()
-  got
+  return got
 }
 
 async function deviceToPort(): Promise<string> throws Error {
@@ -71,7 +71,7 @@ async function deviceToPort(): Promise<string> throws Error {
   await pty.writer.write(new TextEncoder().encode("world"))
   const got = await readText(() => port.read(), 5)
   port.close()
-  got
+  return got
 }
 
 async function roundTripsData(): Promise<void> throws Error {
