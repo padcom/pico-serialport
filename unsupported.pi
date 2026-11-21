@@ -43,5 +43,5 @@ export function openPort(path: string, _options: SerialOptions): SerialPort thro
 
 /// No ports.
 export async function listPorts(_sysfs: string = "/sys", _dev: string = "/dev"): Promise<PortInfo[]> {
-  []
+  return []
 }

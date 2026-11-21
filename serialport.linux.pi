@@ -64,7 +64,7 @@ export function framing(cflag: int, options: SerialOptions): int throws SerialEr
   if ((options.flowControl ?? FlowControl.None) == FlowControl.Hardware) {
     c = c | (t.CRTSCTS as int)
   }
-  c
+  return c
 }
 
 /// Raw mode, the speed and the framing on `fd`.
@@ -141,7 +141,7 @@ export class SerialPort implements ByteStream {
 
   /// `for await (const chunk of port)`.
   public asyncIterator(): Reader {
-    reader
+    return reader
   }
 }
 
