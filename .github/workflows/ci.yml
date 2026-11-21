@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  # 0.4.3 is the first release with Reader.close, which this package needs.
-  PICO_VERSION: 0.4.3
+  # 0.4.3 is the first release with Reader.close, which this package needs (README); CI runs the latest, 0.5.1.
+  PICO_VERSION: 0.5.1
 
 jobs:
   ci:
