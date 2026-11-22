@@ -5,14 +5,15 @@ import { delay } from "std/timers"
 import { Reader, Writer } from "std/process"
 import * as t from "c:termios.h"
 import * as f from "c:fcntl.h"
-import { CFLAG_OFFSET, TERMIOS_BYTES, addr, cText, cfgetospeed, dup, tcgetattr, u32At, cfmakeraw, tcsetattr } from "./posix"
+import { dup } from "std/posix"
+import { CFLAG_OFFSET, TERMIOS_BYTES, cfgetospeed, tcgetattr, cfmakeraw, tcsetattr } from "./posix"
 import { FlowControl, Parity, SerialError, framing, openPort } from "./serialport"
 
 extern "C" {
   function posix_openpt(flags: c_int): c_int
   function grantpt(fd: c_int): c_int
   function unlockpt(fd: c_int): c_int
-  function ptsname_r(fd: c_int, buf: usize, len: usize): c_int
+  function ptsname_r(fd: c_int, buf: ptr<u8>, len: usize): c_int
 }
 
 class Pty {
@@ -26,14 +27,18 @@ class Pty {
     grantpt(m)
     unlockpt(m)
     const name = new Uint8Array(128)
-    ptsname_r(m, addr(name), 128 as usize)
+    unsafe {
+      ptsname_r(m, ptr.bytes(name), 128 as usize)
+    }
     // The master raw too, so nothing is echoed back to the device side.
     const tio = new Uint8Array(TERMIOS_BYTES)
-    tcgetattr(m, addr(tio))
-    cfmakeraw(addr(tio))
-    tcsetattr(m, t.TCSANOW, addr(tio))
+    unsafe {
+      tcgetattr(m, ptr.bytes(tio))
+      cfmakeraw(ptr.bytes(tio))
+      tcsetattr(m, t.TCSANOW, ptr.bytes(tio))
+    }
     this.master = m as int
-    this.path = cText(name)
+    this.path = string.fromCBytes(name)
     this.reader = new Reader(m as int, "pty", true)
     this.writer = new Writer(dup(m) as int, "pty", true)
   }
@@ -41,8 +46,10 @@ class Pty {
   /// The cflag and output speed the pair has now (master and slave share them on Linux).
   public settings(): int[] {
     const tio = new Uint8Array(TERMIOS_BYTES)
-    tcgetattr(master as c_int, addr(tio))
-    return [u32At(tio, CFLAG_OFFSET), cfgetospeed(addr(tio)) as int]
+    unsafe {
+      tcgetattr(master as c_int, ptr.bytes(tio))
+    }
+    return [new DataView(tio).getUint32(CFLAG_OFFSET, true), unsafe { cfgetospeed(ptr.bytes(tio)) } as int]
   }
 }
 

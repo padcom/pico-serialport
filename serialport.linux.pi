@@ -2,10 +2,10 @@
 // framing, read and written asynchronously through the runtime's I/O threads (std/process
 // `Reader`/`Writer` on the port's descriptors). It's a `ByteStream`.
 import * as t from "c:termios.h"
-import * as f from "c:fcntl.h"
 import { Reader, Writer } from "std/process"
-import { CFLAG_OFFSET, O_CLOEXEC, TERMIOS_BYTES, addr, close as closeFd, describe, dup, errno, fcntl, ioctl, setU32At,
-  speedConstant, tcflush, tcgetattr, tcsetattr, u32At, cfmakeraw, cfsetspeed, open as openFd } from "./posix"
+import { EACCES, EBUSY, ENOENT, ENOTTY, EPERM, F_SETFL, O_CLOEXEC, O_NOCTTY, O_NONBLOCK, O_RDWR, close as closeFd, dup, errno,
+  errnoMessage, fcntl, ioctl, open as openFd } from "std/posix"
+import { CFLAG_OFFSET, TERMIOS_BYTES, cfmakeraw, cfsetspeed, speedConstant, tcflush, tcgetattr, tcsetattr } from "./posix"
 import { ByteStream } from "./stream"
 import { FlowControl, Parity, SerialError, SerialOptions } from "./types"
 
@@ -18,15 +18,9 @@ const TIOCNXCL: int = 0x540D
 
 function failure(path: string, what: string): SerialError {
   const e = errno()
-  const code = match (e) {
-    2 => "NOT_FOUND",
-    13 => "PERMISSION_DENIED",
-    1 => "PERMISSION_DENIED",
-    16 => "BUSY",
-    25 => "NOT_A_SERIAL_PORT",
-    _ => "IO",
-  }
-  new SerialError(code, `${path}: ${what}: ${describe(e)}`, e)
+  const code = if (e == ENOENT) "NOT_FOUND" else if (e == EACCES || e == EPERM) "PERMISSION_DENIED" else if (e == EBUSY) "BUSY"
+    else if (e == ENOTTY) "NOT_A_SERIAL_PORT" else "IO"
+  new SerialError(code, `${path}: ${what}: ${errnoMessage(e)}`, e)
 }
 
 function check(cond: bool, message: string): void throws SerialError {
@@ -72,15 +66,19 @@ function configure(fd: c_int, path: string, options: SerialOptions): void throws
   const speed = speedConstant(options.baudRate)
   check(speed >= 0, `baudRate ${options.baudRate} isn't a standard rate`)
   const tio = new Uint8Array(TERMIOS_BYTES)
-  if (tcgetattr(fd, addr(tio)) != 0) {
+  const p = unsafe { ptr.bytes(tio) }
+  if (unsafe { tcgetattr(fd, p) } != 0) {
     throw failure(path, "reading its settings")
   }
-  cfmakeraw(addr(tio))
-  if (cfsetspeed(addr(tio), speed as u32) != 0) {
+  unsafe {
+    cfmakeraw(p)
+  }
+  if (unsafe { cfsetspeed(p, speed as u32) } != 0) {
     throw failure(path, `setting ${options.baudRate} baud`)
   }
-  setU32At(tio, CFLAG_OFFSET, framing(u32At(tio, CFLAG_OFFSET), options))
-  if (tcsetattr(fd, t.TCSANOW, addr(tio)) != 0) {
+  const view = new DataView(tio)
+  view.setUint32(CFLAG_OFFSET, framing(view.getUint32(CFLAG_OFFSET, true), options), true)
+  if (unsafe { tcsetattr(fd, t.TCSANOW, p) } != 0) {
     throw failure(path, "applying its settings")
   }
 }
@@ -148,7 +146,7 @@ export class SerialPort implements ByteStream {
 /// Opens `path` exclusively with `options`.
 export function openPort(path: string, options: SerialOptions): SerialPort throws SerialError {
   // Non-blocking while opening (a modem line without carrier would block), blocking afterwards.
-  const fd = openFd(path, f.O_RDWR | f.O_NOCTTY | f.O_NONBLOCK | (O_CLOEXEC as c_int))
+  const fd = openFd(path, (O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC) as c_int)
   if (fd < 0) {
     throw failure(path, "opening it")
   }
@@ -164,6 +162,6 @@ export function openPort(path: string, options: SerialOptions): SerialPort throw
     closeFd(fd)
     throw e
   }
-  fcntl(fd, f.F_SETFL, f.O_RDWR)
+  fcntl(fd, F_SETFL as c_int, O_RDWR as c_int)
   new SerialPort(path, options, fd as int)
 }
