@@ -36,7 +36,7 @@ port.close()
   - `flush()`, which drops pending input and output;
   - `for await` over the chunks.
 
-  `ByteStream` is the transport-neutral interface for protocol libraries (Modbus, GRBL, …): they take any byte stream, not only a serial port.
+  `ByteStream` is the transport-neutral interface for protocol libraries (Modbus, GRBL, …): they take any byte stream, not only a serial port. It is the standard library's (`std/streams`, pico 0.10.0), re-exported here, so a serial port, `std/net`'s `TcpStream` and `UdpStream`, `std/fs`' `FileStream` and `bytePipe()` all fit the same code.
 - `listPorts()` lists the ttys that have a device behind them, except 8250 placeholders (sysfs `type` 0). USB adapters also carry their vendor and product IDs, serial number, manufacturer and product name.
 - Errors are `SerialError` with a `code`:
   - `NOT_FOUND`;
@@ -62,6 +62,7 @@ pico run examples/monitor.pi -- /dev/ttyUSB0 115200
 
 ## Known limits
 
+- It needs pico 0.10.0 or later: `std/posix`, `std/streams`' `ByteStream` and `DataView`. Ports are listed through [pico-linux-sysfs](https://github.com/padcom/pico-linux-sysfs).
 - Closing a port ends a `read()` that is already waiting: it settles with `null`. This needs pico 0.4.3 or later (`Reader.close()`, [#100](https://github.com/padcom/pico-lang/issues/100)). With pico 0.4.2, a waiting read keeps the program from ending.
 - Linux only so far. A program using this package builds on every native target and on wasm32-wasi, but off Linux `listPorts()` is empty and `openPort` fails with `UNSUPPORTED`. It doesn't build for wasm32-browser, which has no `std/process`.
 
