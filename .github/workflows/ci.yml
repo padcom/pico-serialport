@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 env:
-  # 0.10.0 is the first release with std/posix, std/streams' ByteStream and DataView, which this package uses (README).
-  PICO_VERSION: 0.10.0
+  # 0.10.1 (0.10.0 plus #195: parallel workers fetch git dependencies safely); 0.10.0 is the first release with std/posix, std/streams' ByteStream and DataView, which this package uses (README).
+  PICO_VERSION: 0.10.1
 
 jobs:
   ci:
