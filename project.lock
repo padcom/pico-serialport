@@ -5,7 +5,7 @@
       "name": "padcom/pico-linux-sysfs",
       "version": "0.1.0",
       "git": "https://github.com/padcom/pico-linux-sysfs",
-      "ref": "branch:main",
+      "ref": "tag:v0.1.0",
       "commit": "82aa63970af8cbe42b0b636d64267ae8666588e2",
       "hash": "sha256:d0d778361faafde0ef997ee9f5ce8f2ed8019ae1916cf198ecfc8ef39bc58678"
     },

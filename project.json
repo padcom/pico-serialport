@@ -4,7 +4,7 @@
   "dependencies": {
     "padcom/pico-linux-sysfs": {
       "git": "https://github.com/padcom/pico-linux-sysfs",
-      "branch": "main"
+      "tag": "v0.1.0"
     }
   }
 }
